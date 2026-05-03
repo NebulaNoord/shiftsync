@@ -45,7 +45,7 @@ interface AppState {
   lifetimeMode: boolean
 }
 
-const storageKey = 'shiftsync-local-v1'
+const storageKey = 'shiftsync-local-v2'
 
 const blankShift = (date = isoDate(new Date())): Shift => ({
   id: '',
@@ -468,13 +468,21 @@ function Summary({
         </div>
         <div className="earnings-bar"><i style={{ width: `${netWidth}%` }} /></div>
         <div className="deduction-list">
-          {summary.rows.map((row) => (
-            <div className={`deduction-row ${row.type === 'earned' ? 'positive' : 'negative'}`} key={row.id}>
-              <span>{row.name}</span>
-              <em>{row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'}</em>
-              <strong>{row.type === 'earned' ? '+' : '-'}{money(row.amount, settings.currency)}</strong>
+          {summary.rows.length ? (
+            summary.rows.map((row) => (
+              <div className={`deduction-row ${row.type === 'earned' ? 'positive' : 'negative'}`} key={row.id}>
+                <span>{row.name}</span>
+                <em>{row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'}</em>
+                <strong>{row.type === 'earned' ? '+' : '-'}{money(row.amount, settings.currency)}</strong>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">
+              <div className="empty-illustration">+</div>
+              <strong>No deductions or earnings yet</strong>
+              <span>Add taxes, dues, bonuses, or vacation pay in Settings.</span>
             </div>
-          ))}
+          )}
         </div>
         <div className="export-row">
           <button className="primary-button" type="button" onClick={onCsv}><FileText /> CSV</button>
@@ -603,19 +611,27 @@ function SettingsPanel({
           <h2>Deductions & Earnings</h2>
           <button className="primary-button" type="button" onClick={onAddDeduction}><Plus /> Add row</button>
         </div>
-        {deductions.map((deduction) => (
-          <div className="deduction-edit-row" key={deduction.id}>
-            <input value={deduction.name} onChange={(event) => onDeduction(deduction.id, { name: event.target.value })} />
-            <select value={deduction.type} onChange={(event) => onDeduction(deduction.id, { type: event.target.value as DeductionType })}>
-              <option value="percentage">%</option>
-              <option value="flat">$</option>
-              <option value="earned">+</option>
-            </select>
-            <input type="number" step="0.01" value={deduction.value} onChange={(event) => onDeduction(deduction.id, { value: Number(event.target.value) })} />
-            <label className="switch"><input type="checkbox" checked={deduction.active} onChange={(event) => onDeduction(deduction.id, { active: event.target.checked })} /><span /></label>
-            <button className="glass-icon danger" type="button" onClick={() => onDeleteDeduction(deduction.id)}><Trash2 /></button>
+        {deductions.length ? (
+          deductions.map((deduction) => (
+            <div className="deduction-edit-row" key={deduction.id}>
+              <input value={deduction.name} onChange={(event) => onDeduction(deduction.id, { name: event.target.value })} />
+              <select value={deduction.type} onChange={(event) => onDeduction(deduction.id, { type: event.target.value as DeductionType })}>
+                <option value="percentage">%</option>
+                <option value="flat">$</option>
+                <option value="earned">+</option>
+              </select>
+              <input type="number" step="0.01" value={deduction.value} onChange={(event) => onDeduction(deduction.id, { value: Number(event.target.value) })} />
+              <label className="switch"><input type="checkbox" checked={deduction.active} onChange={(event) => onDeduction(deduction.id, { active: event.target.checked })} /><span /></label>
+              <button className="glass-icon danger" type="button" onClick={() => onDeleteDeduction(deduction.id)}><Trash2 /></button>
+            </div>
+          ))
+        ) : (
+          <div className="empty-state settings-empty">
+            <div className="empty-illustration">%</div>
+            <strong>No tax or earnings rows yet</strong>
+            <span>Use Add row to create the exact deductions you want tracked.</span>
           </div>
-        ))}
+        )}
       </div>
     </section>
   )
