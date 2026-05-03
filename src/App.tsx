@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Download,
   FileJson,
   FileText,
   Import,
@@ -47,6 +48,13 @@ interface AppState {
 
 const storageKey = 'shiftsync-local-v2'
 
+const canadianPresetDeductions: Deduction[] = [
+  { id: 'preset-federal-tax', name: 'Federal Income Tax', type: 'percentage', value: 12, active: true },
+  { id: 'preset-provincial-tax', name: 'Provincial Tax', type: 'percentage', value: 5, active: true },
+  { id: 'preset-cpp', name: 'CPP', type: 'percentage', value: 5.95, active: true },
+  { id: 'preset-ei', name: 'EI Premium', type: 'percentage', value: 1.66, active: true },
+]
+
 const blankShift = (date = isoDate(new Date())): Shift => ({
   id: '',
   date,
@@ -57,12 +65,7 @@ const blankShift = (date = isoDate(new Date())): Shift => ({
 })
 
 function loadState(): AppState {
-  const fallback: AppState = {
-    shifts: shiftsSeed,
-    deductions: deductionsSeed,
-    settings: settingsSeed,
-    lifetimeMode: false,
-  }
+  const fallback = loadEmptyState()
   try {
     const stored = localStorage.getItem(storageKey)
     return stored ? { ...fallback, ...JSON.parse(stored) } : fallback
@@ -71,15 +74,26 @@ function loadState(): AppState {
   }
 }
 
+function loadEmptyState(): AppState {
+  return {
+    shifts: shiftsSeed,
+    deductions: deductionsSeed,
+    settings: settingsSeed,
+    lifetimeMode: false,
+  }
+}
+
 function App() {
   const [view, setView] = useState<View>('dashboard')
   const [appState, setAppState] = useState<AppState>(loadState)
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date('2026-05-02')))
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
   const [editingShift, setEditingShift] = useState<Shift | null>(null)
-  const [draftShift, setDraftShift] = useState<Shift>(() => blankShift('2026-05-02'))
+  const [draftShift, setDraftShift] = useState<Shift>(() => blankShift())
   const [toast, setToast] = useState('')
-  const [importText, setImportText] = useState('date,start,end,location\n2026-05-06,09:00,16:30,Harbour Desk')
+  const [importText, setImportText] = useState('')
   const [importPreview, setImportPreview] = useState<Shift[]>([])
+  const [restoreText, setRestoreText] = useState('')
+  const [clearArmed, setClearArmed] = useState(false)
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(appState))
@@ -181,8 +195,68 @@ function App() {
   }
 
   const exportJson = () => {
-    download('shiftsync-export.json', JSON.stringify(appState, null, 2), 'application/json')
-    showToast('JSON exported')
+    download('shiftsync-backup.json', JSON.stringify(appState, null, 2), 'application/json')
+    showToast('Backup downloaded')
+  }
+
+  const exportPdf = () => {
+    const lines = [
+      'ShiftSync Pay Summary',
+      `Generated: ${new Date().toLocaleString()}`,
+      `Period type: ${settings.periodType}`,
+      `Hourly rate: ${money(settings.hourlyRate, settings.currency)}`,
+      '',
+      `Gross pay: ${money(periodSummary.gross, settings.currency)}`,
+      `Total deductions: ${money(periodSummary.totalDeductions, settings.currency)}`,
+      `Net pay: ${money(periodSummary.net, settings.currency)}`,
+      `Total hours: ${hours(totalHours)}`,
+      '',
+      'Deductions & earnings:',
+      ...(deductions.length
+        ? deductions.map((row) => `${row.name} - ${row.type} - ${row.value}${row.type === 'percentage' ? '%' : ''} - ${row.active ? 'active' : 'inactive'}`)
+        : ['None']),
+      '',
+      'Shifts:',
+      ...(shifts.length
+        ? shifts.map((shift) => `${shift.date} ${shift.startTime}-${shift.endTime} ${shift.location} ${hours(shiftHours(shift))}`)
+        : ['None']),
+    ]
+    download('shiftsync-summary.pdf', createSimplePdf(lines), 'application/pdf')
+    showToast('PDF exported')
+  }
+
+  const restoreBackup = () => {
+    try {
+      const parsed = JSON.parse(restoreText) as Partial<AppState>
+      const next: AppState = {
+        shifts: Array.isArray(parsed.shifts) ? parsed.shifts : [],
+        deductions: Array.isArray(parsed.deductions) ? parsed.deductions : [],
+        settings: { ...settingsSeed, ...parsed.settings },
+        lifetimeMode: Boolean(parsed.lifetimeMode),
+      }
+      setAppState(next)
+      setRestoreText('')
+      showToast('Backup restored')
+    } catch {
+      showToast('Paste a valid ShiftSync backup JSON file')
+    }
+  }
+
+  const clearLocalData = () => {
+    if (!clearArmed) {
+      setClearArmed(true)
+      showToast('Tap clear again to confirm')
+      return
+    }
+    const fresh = loadEmptyState()
+    localStorage.removeItem(storageKey)
+    setAppState(fresh)
+    setWeekStart(startOfWeek(new Date()))
+    setDraftShift(blankShift())
+    setImportPreview([])
+    setRestoreText('')
+    setClearArmed(false)
+    showToast('Local data cleared')
   }
 
   const updateDeduction = (id: string, patch: Partial<Deduction>) => {
@@ -196,6 +270,19 @@ function App() {
         { id: crypto.randomUUID(), name: 'Custom row', type: 'flat', value: 0, active: true },
       ],
     })
+  }
+
+  const addCanadianPresets = () => {
+    const existingNames = new Set(deductions.map((deduction) => deduction.name.toLowerCase()))
+    const missing = canadianPresetDeductions
+      .filter((deduction) => !existingNames.has(deduction.name.toLowerCase()))
+      .map((deduction) => ({ ...deduction, id: crypto.randomUUID() }))
+    if (!missing.length) {
+      showToast('Canadian presets already added')
+      return
+    }
+    updateState({ deductions: [...deductions, ...missing] })
+    showToast('Canadian deduction presets added')
   }
 
   return (
@@ -263,6 +350,7 @@ function App() {
               onToggleLifetime={() => updateState({ lifetimeMode: !lifetimeMode })}
               onCsv={exportCsv}
               onJson={exportJson}
+              onPdf={exportPdf}
             />
           )}
 
@@ -289,7 +377,14 @@ function App() {
               onSettings={(next) => updateState({ settings: next })}
               onDeduction={updateDeduction}
               onAddDeduction={addDeduction}
+              onAddCanadianPresets={addCanadianPresets}
               onDeleteDeduction={(id) => updateState({ deductions: deductions.filter((item) => item.id !== id) })}
+              onBackup={exportJson}
+              restoreText={restoreText}
+              setRestoreText={setRestoreText}
+              onRestore={restoreBackup}
+              clearArmed={clearArmed}
+              onClearLocalData={clearLocalData}
             />
           )}
 
@@ -359,7 +454,7 @@ function Dashboard(props: {
   onAdd: (date: Date) => void
   onEdit: (shift: Shift) => void
 }) {
-  const today = isoDate(new Date('2026-05-02'))
+  const today = isoDate(new Date())
   const totalHours = props.shifts
     .filter((shift) => isWithin(shift.date, props.weekStart, props.weekEnd))
     .reduce((total, shift) => total + shiftHours(shift), 0)
@@ -445,6 +540,7 @@ function Summary({
   onToggleLifetime,
   onCsv,
   onJson,
+  onPdf,
 }: {
   summary: ReturnType<typeof summarizePay>
   settings: PayrollSettings
@@ -453,6 +549,7 @@ function Summary({
   onToggleLifetime: () => void
   onCsv: () => void
   onJson: () => void
+  onPdf: () => void
 }) {
   const netWidth = summary.gross ? Math.max(4, Math.min(100, (summary.net / summary.gross) * 100)) : 0
   return (
@@ -486,7 +583,8 @@ function Summary({
         </div>
         <div className="export-row">
           <button className="primary-button" type="button" onClick={onCsv}><FileText /> CSV</button>
-          <button className="primary-button" type="button" onClick={onJson}><FileJson /> JSON</button>
+          <button className="primary-button" type="button" onClick={onJson}><FileJson /> Backup</button>
+          <button className="primary-button" type="button" onClick={onPdf}><Download /> PDF</button>
         </div>
       </div>
     </section>
@@ -579,37 +677,68 @@ function SettingsPanel({
   onSettings,
   onDeduction,
   onAddDeduction,
+  onAddCanadianPresets,
   onDeleteDeduction,
+  onBackup,
+  restoreText,
+  setRestoreText,
+  onRestore,
+  clearArmed,
+  onClearLocalData,
 }: {
   settings: PayrollSettings
   deductions: Deduction[]
   onSettings: (settings: PayrollSettings) => void
   onDeduction: (id: string, patch: Partial<Deduction>) => void
   onAddDeduction: () => void
+  onAddCanadianPresets: () => void
   onDeleteDeduction: (id: string) => void
+  onBackup: () => void
+  restoreText: string
+  setRestoreText: (value: string) => void
+  onRestore: () => void
+  clearArmed: boolean
+  onClearLocalData: () => void
 }) {
   return (
     <section className="settings-layout">
-      <div className="glass-card form-panel">
-        <h2>Pay info</h2>
-        <div className="form-grid">
-          <Field label="Hourly rate"><input type="number" step="0.01" value={settings.hourlyRate} onChange={(event) => onSettings({ ...settings, hourlyRate: Number(event.target.value) })} /></Field>
-          <Field label="Pay period">
-            <select value={settings.periodType} onChange={(event) => onSettings({ ...settings, periodType: event.target.value as PayPeriodType })}>
-              <option value="weekly">Weekly</option>
-              <option value="bi-weekly">Bi-weekly</option>
-              <option value="semi-monthly">Semi-monthly</option>
-              <option value="monthly">Monthly</option>
-            </select>
+      <div className="settings-stack">
+        <div className="glass-card form-panel">
+          <h2>Pay info</h2>
+          <div className="form-grid">
+            <Field label="Hourly rate"><input type="number" step="0.01" value={settings.hourlyRate} onChange={(event) => onSettings({ ...settings, hourlyRate: Number(event.target.value) })} /></Field>
+            <Field label="Pay period">
+              <select value={settings.periodType} onChange={(event) => onSettings({ ...settings, periodType: event.target.value as PayPeriodType })}>
+                <option value="weekly">Weekly</option>
+                <option value="bi-weekly">Bi-weekly</option>
+                <option value="semi-monthly">Semi-monthly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </Field>
+            <Field label="Province / territory"><input value={settings.province} onChange={(event) => onSettings({ ...settings, province: event.target.value })} /></Field>
+            <Field label="Currency"><input value={settings.currency} onChange={(event) => onSettings({ ...settings, currency: event.target.value.toUpperCase() })} /></Field>
+          </div>
+        </div>
+        <div className="glass-card local-panel">
+          <h2>Local storage</h2>
+          <p>ShiftSync saves data only in this browser on this device. Back up before clearing browser data or switching devices.</p>
+          <div className="export-row wrap">
+            <button className="primary-button" type="button" onClick={onBackup}><FileJson /> Backup data</button>
+            <button className="danger-button" type="button" onClick={onClearLocalData}><Trash2 /> {clearArmed ? 'Confirm clear' : 'Clear local data'}</button>
+          </div>
+          <Field label="Restore from backup">
+            <textarea value={restoreText} onChange={(event) => setRestoreText(event.target.value)} placeholder="Paste a ShiftSync backup JSON file here" />
           </Field>
-          <Field label="Province / territory"><input value={settings.province} onChange={(event) => onSettings({ ...settings, province: event.target.value })} /></Field>
-          <Field label="Currency"><input value={settings.currency} onChange={(event) => onSettings({ ...settings, currency: event.target.value.toUpperCase() })} /></Field>
+          <button className="primary-button" type="button" onClick={onRestore}><Import /> Restore backup</button>
         </div>
       </div>
       <div className="glass-card deductions-editor">
         <div className="section-head">
           <h2>Deductions & Earnings</h2>
-          <button className="primary-button" type="button" onClick={onAddDeduction}><Plus /> Add row</button>
+          <div className="export-row wrap">
+            <button className="primary-button" type="button" onClick={onAddCanadianPresets}>Add Canadian presets</button>
+            <button className="primary-button" type="button" onClick={onAddDeduction}><Plus /> Add row</button>
+          </div>
         </div>
         {deductions.length ? (
           deductions.map((deduction) => (
@@ -685,6 +814,40 @@ function download(filename: string, content: string, type: string) {
   link.download = filename
   link.click()
   URL.revokeObjectURL(url)
+}
+
+function createSimplePdf(lines: string[]) {
+  const safeLines = lines.map((line) =>
+    line
+      .replace(/\\/g, '\\\\')
+      .replace(/\(/g, '\\(')
+      .replace(/\)/g, '\\)')
+      .replace(/[^\x20-\x7E]/g, ''),
+  )
+  const textCommands = safeLines
+    .slice(0, 42)
+    .map((line, index) => `BT /F1 11 Tf 48 ${760 - index * 16} Td (${line}) Tj ET`)
+    .join('\n')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${textCommands.length} >>\nstream\n${textCommands}\nendstream`,
+  ]
+  let pdf = '%PDF-1.4\n'
+  const offsets = [0]
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length)
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`
+  })
+  const xrefAt = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`
+  })
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`
+  return pdf
 }
 
 export default App

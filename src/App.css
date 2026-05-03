@@ -271,6 +271,10 @@ h2 {
   align-items: center;
 }
 
+.export-row.wrap {
+  flex-wrap: wrap;
+}
+
 .glass-icon {
   background: rgba(255, 255, 255, 0.28);
   color: var(--depth-blue);
@@ -552,8 +556,13 @@ h2 {
 .form-panel,
 .side-stack,
 .settings-layout,
-.account-layout {
+.settings-stack {
   min-height: 0;
+}
+
+.settings-stack {
+  display: grid;
+  gap: 16px;
 }
 
 .side-stack {
@@ -639,9 +648,23 @@ textarea {
   font-weight: 900;
 }
 
-.settings-layout,
 .settings-layout {
   grid-template-columns: 0.8fr 1.2fr;
+}
+
+.local-panel {
+  padding: 16px;
+}
+
+.local-panel p {
+  margin: 8px 0 14px;
+  color: rgba(30, 79, 145, 0.74);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.local-panel textarea {
+  min-height: 96px;
 }
 
 .deduction-edit-row {
