@@ -290,7 +290,7 @@ function App() {
       <div className="app-shell">
         <aside className="sidebar glass-card">
           <div className="brand-lockup">
-            <div className="brand-mark">S</div>
+            <img src="/logo.jpg" alt="ShiftSync" className="brand-mark" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
             <div>
               <strong>ShiftSync</strong>
               <span>Local pay tracker</span>

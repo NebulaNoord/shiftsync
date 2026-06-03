@@ -1,17 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900;1000&display=swap');
 
 :root {
-  --sky-blue: #6ec6ff;
-  --aqua: #00d4c6;
-  --lime: #a4e400;
+  --secondary: #479B68;
+  --primary: #C44A0B;
+  --primary-hover: #A63D08;
   --white: #ffffff;
-  --cloud-gray: #e6f1f7;
-  --deep-sky: #3aa0e6;
-  --depth-blue: #1e4f91;
+  --background: #F8F6F2;
+  --surface: #FFFFFF;
+  --text: #1E2328;
+  --muted: #667085;
   --glass-white: rgba(255, 255, 255, 0.25);
-  --glow-cyan: rgba(0, 212, 198, 0.6);
+  --glow-primary: rgba(196, 74, 11, 0.6);
   --soft-shadow: rgba(0, 0, 0, 0.1);
   --font-ui: 'Nunito', 'Poppins', sans-serif;
+  
+  /* Fallback for component-specific vars */
+  --depth-blue: #1E2328;
+  --cloud-gray: #F8F6F2;
+  --aqua: #C44A0B;
+  --sky-blue: #479B68;
+  --lime: #479B68;
+  
   font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
