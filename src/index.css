@@ -1,26 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900;1000&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --secondary: #479B68;
-  --primary: #C44A0B;
-  --primary-hover: #A63D08;
-  --white: #ffffff;
-  --background: #F8F6F2;
-  --surface: #FFFFFF;
-  --text: #1E2328;
-  --muted: #667085;
-  --glass-white: rgba(255, 255, 255, 0.25);
-  --glow-primary: rgba(196, 74, 11, 0.6);
-  --soft-shadow: rgba(0, 0, 0, 0.1);
-  --font-ui: 'Nunito', 'Poppins', sans-serif;
-  
-  /* Fallback for component-specific vars */
-  --depth-blue: #1E2328;
-  --cloud-gray: #F8F6F2;
-  --aqua: #C44A0B;
-  --sky-blue: #479B68;
-  --lime: #479B68;
-  
+  /* Nebula Noord brand system */
+  --ink: #0a0a0a;          /* near-black */
+  --paper: #ffffff;        /* white base */
+  --red: #d41f26;          /* Carmin Red */
+  --red-deep: #ab1720;     /* pressed red */
+  --aqua: #95d9c0;         /* Aqua (supporting) */
+  --aqua-deep: #4f9c83;    /* aqua for text on white */
+  --muted: #6b6b6b;
+  --line: #0a0a0a;
+
+  --shadow-offset: 6px 6px 0 var(--ink);
+  --shadow-offset-sm: 4px 4px 0 var(--ink);
+  --radius: 14px;
+  --radius-sm: 9px;
+
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+
   font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -43,6 +41,13 @@ body,
 body {
   margin: 0;
   font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
 }
 
 button,

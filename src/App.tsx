@@ -108,7 +108,7 @@ function App() {
   const { shifts, deductions, settings, lifetimeMode } = appState
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart])
   const weekEnd = addDays(weekStart, 6)
-  const period = getPayPeriodRange(weekStart, settings.periodType)
+  const period = getPayPeriodRange(weekStart, settings.periodType, settings.payPeriodStart)
   const periodShifts = shifts.filter((shift) => isWithin(shift.date, period.start, period.end))
   const visibleShifts = lifetimeMode ? shifts : periodShifts
   const weekShifts = shifts.filter((shift) => isWithin(shift.date, weekStart, weekEnd))
@@ -714,6 +714,14 @@ function SettingsPanel({
                 <option value="semi-monthly">Semi-monthly</option>
                 <option value="monthly">Monthly</option>
               </select>
+            </Field>
+            <Field label="Your pay-period start">
+              <input
+                type="date"
+                value={settings.payPeriodStart || ''}
+                onChange={(event) => onSettings({ ...settings, payPeriodStart: event.target.value || undefined })}
+              />
+              <small className="field-hint">Anchor every period to your real cycle so shifts land in the correct pay.</small>
             </Field>
             <Field label="Province / territory"><input value={settings.province} onChange={(event) => onSettings({ ...settings, province: event.target.value })} /></Field>
             <Field label="Currency"><input value={settings.currency} onChange={(event) => onSettings({ ...settings, currency: event.target.value.toUpperCase() })} /></Field>

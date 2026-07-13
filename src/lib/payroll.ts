@@ -25,6 +25,12 @@ export interface PayrollSettings {
   periodType: PayPeriodType
   province: string
   currency: string
+  /**
+   * The user's real pay-period start date (YYYY-MM-DD). When set, every
+   * period is anchored to this date so shifts land in the correct cycle
+   * instead of a fixed calendar grid they can't control.
+   */
+  payPeriodStart?: string
 }
 
 export interface DeductionResult extends Deduction {
@@ -46,6 +52,12 @@ export function toDate(value: string) {
   return new Date(year, month - 1, day)
 }
 
+function startOfDay(date: Date) {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
+
 export function isoDate(date: Date) {
   const copy = new Date(date)
   copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset())
@@ -65,6 +77,10 @@ export function addDays(date: Date, days: number) {
   const copy = new Date(date)
   copy.setDate(copy.getDate() + days)
   return copy
+}
+
+export function lastDayOfMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate()
 }
 
 export function formatDateRange(start: Date, end: Date) {
@@ -116,17 +132,56 @@ export function summarizePay(shifts: Shift[], deductions: Deduction[], defaultRa
   }
 }
 
-export function getPayPeriodRange(date: Date, type: PayPeriodType) {
+/**
+ * Resolve the pay period that contains `date`.
+ *
+ * When `customStart` is provided the period is anchored to that exact date,
+ * so the user's real pay cycle drives which shifts are included. Without it
+ * a sensible calendar default is used (Mon-Sun week, 14-day block from the
+ * current week, calendar semi-month, calendar month).
+ */
+export function getPayPeriodRange(date: Date, type: PayPeriodType, customStart?: string) {
   const year = date.getFullYear()
   const month = date.getMonth()
+  const ref = startOfDay(date)
+
+  if (customStart) {
+    const anchor = startOfDay(toDate(customStart))
+    if (type === 'weekly' || type === 'bi-weekly') {
+      const length = type === 'weekly' ? 7 : 14
+      const periodsBack = Math.floor((ref.getTime() - anchor.getTime()) / (length * dayMs))
+      const start = addDays(anchor, periodsBack * length)
+      return { start, end: addDays(start, length - 1) }
+    }
+    if (type === 'semi-monthly') {
+      const cut = Math.min(Math.max(anchor.getDate(), 1), 28)
+      if (ref.getDate() >= cut) {
+        const start = new Date(year, month, cut)
+        const end = new Date(year, month, lastDayOfMonth(year, month))
+        return { start, end }
+      }
+      const start = new Date(year, month, 1)
+      const end = new Date(year, month, cut - 1)
+      return { start, end }
+    }
+    // monthly: boundaries fall on `cut` day-of-month
+    const cut = Math.min(Math.max(anchor.getDate(), 1), 28)
+    if (ref.getDate() >= cut) {
+      const start = new Date(year, month, cut)
+      const end = new Date(year, month + 1, cut - 1)
+      return { start, end }
+    }
+    const start = new Date(year, month - 1, cut)
+    const end = new Date(year, month, cut - 1)
+    return { start, end }
+  }
+
   if (type === 'weekly') {
     const start = startOfWeek(date)
     return { start, end: addDays(start, 6) }
   }
   if (type === 'bi-weekly') {
-    const anchor = new Date(2026, 0, 5)
-    const elapsedWeeks = Math.floor((startOfWeek(date).getTime() - anchor.getTime()) / (7 * dayMs))
-    const start = addDays(anchor, Math.floor(elapsedWeeks / 2) * 14)
+    const start = startOfWeek(date)
     return { start, end: addDays(start, 13) }
   }
   if (type === 'semi-monthly') {
@@ -139,8 +194,8 @@ export function getPayPeriodRange(date: Date, type: PayPeriodType) {
 }
 
 export function isWithin(dateString: string, start: Date, end: Date) {
-  const date = toDate(dateString)
-  return date >= start && date <= end
+  const date = startOfDay(toDate(dateString))
+  return date >= startOfDay(start) && date <= startOfDay(end)
 }
 
 export function money(value: number, currency = 'CAD') {
