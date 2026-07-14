@@ -715,22 +715,43 @@ function Summary({
           <strong>{money(ytd.net, settings.currency)} net · {money(ytd.gross, settings.currency)} gross</strong>
         </div>
         <div className="deduction-list">
-          {summary.rows.length ? (
-            summary.rows.map((row) => (
-              <div className={`deduction-row ${row.type === 'earned' ? 'positive' : 'negative'}`} key={row.id}>
-                <span>{row.name}</span>
-                <em>{row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'}</em>
-                <strong>{row.type === 'earned' ? '+' : '-'}{money(row.amount, settings.currency)}</strong>
-                {row.note && <small className="row-note">{row.note}</small>}
-              </div>
-            ))
-          ) : (
-            <div className="empty-state">
-              <div className="empty-illustration">+</div>
-              <strong>No deductions or earnings yet</strong>
-              <span>Add taxes, dues, bonuses, or vacation pay in Settings.</span>
-            </div>
-          )}
+          {(() => {
+            const applied = summary.rows.filter((row) => !row.nonCash)
+            const tracked = summary.rows.filter((row) => row.nonCash)
+            const basePay = summary.gross - summary.positiveAdjustments + summary.totalDeductions
+            const typeLabel = (row: typeof summary.rows[number]) =>
+              row.nonCash ? 'tracked' : row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'
+            return (
+              <>
+                <div className="deduction-row base">
+                  <span>Regular Pay</span>
+                  <em>base</em>
+                  <strong>{money(basePay, settings.currency)}</strong>
+                </div>
+                {applied.map((row) => (
+                  <div className={`deduction-row ${row.type === 'earned' ? 'positive' : 'negative'}`} key={row.id}>
+                    <span>{row.name}</span>
+                    <em>{typeLabel(row)}</em>
+                    <strong>{row.type === 'earned' ? '+' : '-'}{money(row.amount, settings.currency)}</strong>
+                    {row.note && <small className="row-note">{row.note}</small>}
+                  </div>
+                ))}
+                {tracked.length > 0 && (
+                  <div className="tracked-block">
+                    <span className="eyeline">Tracked only (not in gross/net)</span>
+                    {tracked.map((row) => (
+                      <div className="deduction-row tracked" key={row.id}>
+                        <span>{row.name}</span>
+                        <em>{typeLabel(row)}</em>
+                        <strong>+{money(row.amount, settings.currency)}</strong>
+                        {row.note && <small className="row-note">{row.note}</small>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
         <div className="export-row">
           <button className="primary-button" type="button" onClick={onCsv}><FileText /> CSV</button>

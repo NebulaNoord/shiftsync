@@ -68,6 +68,8 @@ export interface PaySummary {
   totalDeductions: number
   net: number
   positiveAdjustments: number
+  /** Non-cash benefits (e.g. scholarship accrual) shown for tracking only — excluded from gross/net. */
+  trackedBenefits: number
   overtimePay: number
   rows: DeductionResult[]
 }
@@ -241,10 +243,13 @@ export function summarizePay(
     }
   }
   const positiveAdjustments = rows
-    .filter((row) => row.type === 'earned')
+    .filter((row) => row.type === 'earned' && !row.nonCash)
     .reduce((total, row) => total + row.amount, 0)
   const negativeAdjustments = rows
     .filter((row) => row.type !== 'earned')
+    .reduce((total, row) => total + row.amount, 0)
+  const trackedBenefits = rows
+    .filter((row) => row.nonCash)
     .reduce((total, row) => total + row.amount, 0)
   const gross = grossBeforeAdjustments + positiveAdjustments
   const net = gross - negativeAdjustments
@@ -253,6 +258,7 @@ export function summarizePay(
     totalDeductions: negativeAdjustments,
     net,
     positiveAdjustments,
+    trackedBenefits,
     overtimePay,
     overtimeHours,
     rows,
@@ -481,13 +487,13 @@ export function canadianEarningsPresets(): CanadianPreset[] {
     },
     {
       id: 'preset-scholarship',
-      name: 'Scholarship Accrual',
+      name: 'Accrued (non-cash)',
       type: 'earned',
       value: 0,
       active: true,
       basedOn: 'base',
       nonCash: true,
-      note: 'Non-cash benefit, % of Regular pay (excluded from EI)',
+      note: 'Tracked benefit, % of Regular pay (not added to gross/net)',
     },
   ]
 }
