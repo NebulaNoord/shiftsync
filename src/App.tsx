@@ -23,6 +23,7 @@ import { deductionsSeed, settingsSeed, shiftsSeed } from './data/seed'
 import {
   addDays,
   canadianTaxPresets,
+  canadianEarningsPresets,
   formatDateRange,
   getPayPeriodRange,
   getWeekDays,
@@ -308,7 +309,7 @@ function App() {
     updateState({
       deductions: [
         ...deductions,
-        { id: crypto.randomUUID(), name: 'Custom row', type: 'flat', value: 0, active: true },
+        { id: crypto.randomUUID(), name: 'New earnings', type: 'earned', value: 0, active: true },
       ],
     })
   }
@@ -326,6 +327,20 @@ function App() {
     }
     updateState({ deductions: [...deductions, ...missing] })
     showToast('Canadian deduction presets added')
+  }
+
+  const addEarningsPresets = () => {
+    const existingNames = new Set(deductions.map((deduction) => deduction.name.toLowerCase()))
+    const presets = canadianEarningsPresets()
+    const missing = presets
+      .filter((deduction) => !existingNames.has(deduction.name.toLowerCase()))
+      .map((deduction) => ({ ...deduction, id: crypto.randomUUID() }))
+    if (!missing.length) {
+      showToast('Earnings presets already added')
+      return
+    }
+    updateState({ deductions: [...deductions, ...missing] })
+    showToast('Vacation pay + scholarship added')
   }
 
   const stepPeriod = (dir: 1 | -1) => {
@@ -480,6 +495,7 @@ function App() {
               onDeduction={updateDeduction}
               onAddDeduction={addDeduction}
               onAddCanadianPresets={addCanadianPresets}
+              onAddEarningsPresets={addEarningsPresets}
               onDeleteDeduction={(id) => updateState({ deductions: deductions.filter((item) => item.id !== id) })}
               onBackup={exportJson}
               restoreText={restoreText}
@@ -852,6 +868,7 @@ function SettingsPanel({
   onDeduction,
   onAddDeduction,
   onAddCanadianPresets,
+  onAddEarningsPresets,
   onDeleteDeduction,
   onBackup,
   restoreText,
@@ -866,6 +883,7 @@ function SettingsPanel({
   onDeduction: (id: string, patch: Partial<Deduction>) => void
   onAddDeduction: () => void
   onAddCanadianPresets: () => void
+  onAddEarningsPresets: () => void
   onDeleteDeduction: (id: string) => void
   onBackup: () => void
   restoreText: string
@@ -923,6 +941,7 @@ function SettingsPanel({
           <h2>Deductions & Earnings</h2>
           <div className="export-row wrap">
             <button className="primary-button" type="button" onClick={onAddCanadianPresets}>Add Canadian presets</button>
+            <button className="primary-button" type="button" onClick={onAddEarningsPresets}>Add earnings</button>
             <button className="primary-button" type="button" onClick={onAddDeduction}><Plus /> Add row</button>
           </div>
         </div>
@@ -936,6 +955,16 @@ function SettingsPanel({
                 <option value="earned">+</option>
               </select>
               <input type="number" step="0.01" value={deduction.value} onChange={(event) => onDeduction(deduction.id, { value: Number(event.target.value) })} />
+              {deduction.type === 'earned' && (
+                <label className="pct-toggle" title="Treat value as % of gross instead of a flat amount">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(deduction.earnedPercent)}
+                    onChange={(event) => onDeduction(deduction.id, { earnedPercent: event.target.checked })}
+                  />
+                  % of gross
+                </label>
+              )}
               <label className="switch"><input type="checkbox" checked={deduction.active} onChange={(event) => onDeduction(deduction.id, { active: event.target.checked })} /><span /></label>
               <button className="glass-icon danger" type="button" onClick={() => onDeleteDeduction(deduction.id)}><Trash2 /></button>
             </div>

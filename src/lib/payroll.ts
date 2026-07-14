@@ -20,6 +20,8 @@ export interface Deduction {
   type: DeductionType
   value: number
   active: boolean
+  /** When true and type === 'earned', value is a % of gross (e.g. 4% vacation pay). */
+  earnedPercent?: boolean
 }
 
 export interface PayrollSettings {
@@ -217,10 +219,13 @@ export function summarizePay(
   const rows = deductions
     .filter((deduction) => deduction.active)
     .map((deduction) => {
-      const amount =
-        deduction.type === 'percentage'
-          ? grossBeforeAdjustments * (deduction.value / 100)
-          : deduction.value
+      // earned rows may be a flat amount OR a % of gross (earnedPercent)
+      const isPercent =
+        deduction.type === 'percentage' ||
+        (deduction.type === 'earned' && Boolean(deduction.earnedPercent))
+      const amount = isPercent
+        ? grossBeforeAdjustments * (deduction.value / 100)
+        : deduction.value
       return { ...deduction, amount }
     })
   const positiveAdjustments = rows
@@ -439,6 +444,34 @@ export function canadianTaxPresets(
       value: round2(EI_RATE * 100),
       active: true,
       note: eiCapped ? 'EI capped at annual max' : undefined,
+    },
+  ]
+}
+
+/**
+ * Common Canadian *earnings* additions to a paycheque — positive rows that
+ * increase gross. Vacation pay is usually a percentage of gross (4% standard,
+ * 6% after 5+ years); scholarship accrual is typically a flat per-period
+ * amount. Values are starting guesses — edit them to match your actual stub.
+ */
+export function canadianEarningsPresets(): CanadianPreset[] {
+  return [
+    {
+      id: 'preset-vacation-pay',
+      name: 'Vacation Pay',
+      type: 'earned',
+      value: 4,
+      active: true,
+      earnedPercent: true,
+      note: 'Usually 4% of gross (6% after 5+ yrs)',
+    },
+    {
+      id: 'preset-scholarship',
+      name: 'Scholarship Accrual',
+      type: 'earned',
+      value: 0,
+      active: true,
+      note: 'Flat amount added per paycheque',
     },
   ]
 }
