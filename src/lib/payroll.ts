@@ -20,8 +20,19 @@ export interface Deduction {
   type: DeductionType
   value: number
   active: boolean
-  /** When true and type === 'earned', value is a % of gross (e.g. 4% vacation pay). */
+  /** When true and type === 'earned', value is a % of its base (e.g. 4% vacation pay). */
   earnedPercent?: boolean
+  /**
+   * What this row's amount is computed against:
+   * - 'base'    = straight shift earnings only (excludes other earnings/deductions)
+   * - 'running' = the running gross so far (all prior rows applied in order)
+   * Defaults to 'running' for backwards compatibility.
+   */
+  basedOn?: 'base' | 'running'
+  /** Non-cash benefit (e.g. scholarship accrual). Included in gross for display
+   * but excluded from the running base used by later % rows (EI-insurable
+   * earnings exclude non-cash). */
+  nonCash?: boolean
 }
 
 export interface PayrollSettings {
@@ -216,18 +227,19 @@ export function summarizePay(
     }
   }
 
-  const rows = deductions
-    .filter((deduction) => deduction.active)
-    .map((deduction) => {
-      // earned rows may be a flat amount OR a % of gross (earnedPercent)
-      const isPercent =
-        deduction.type === 'percentage' ||
-        (deduction.type === 'earned' && Boolean(deduction.earnedPercent))
-      const amount = isPercent
-        ? grossBeforeAdjustments * (deduction.value / 100)
-        : deduction.value
-      return { ...deduction, amount }
-    })
+  const rows: DeductionResult[] = []
+  let running = grossBeforeAdjustments
+  for (const deduction of deductions.filter((d) => d.active)) {
+    const isPercent = deduction.type === 'percentage' || (deduction.type === 'earned' && Boolean(deduction.earnedPercent))
+    const base = deduction.basedOn === 'base' ? grossBeforeAdjustments : running
+    const amount = isPercent ? base * (deduction.value / 100) : deduction.value
+    rows.push({ ...deduction, amount })
+    if (deduction.type === 'earned') {
+      if (!deduction.nonCash) running += amount
+    } else {
+      running -= amount
+    }
+  }
   const positiveAdjustments = rows
     .filter((row) => row.type === 'earned')
     .reduce((total, row) => total + row.amount, 0)
@@ -443,7 +455,8 @@ export function canadianTaxPresets(
       type: 'percentage',
       value: round2(EI_RATE * 100),
       active: true,
-      note: eiCapped ? 'EI capped at annual max' : undefined,
+      basedOn: 'running',
+      note: eiCapped ? 'EI capped at annual max' : 'On Regular + Vacation pay',
     },
   ]
 }
@@ -463,7 +476,8 @@ export function canadianEarningsPresets(): CanadianPreset[] {
       value: 4,
       active: true,
       earnedPercent: true,
-      note: 'Usually 4% of gross (6% after 5+ yrs)',
+      basedOn: 'base',
+      note: '4% of Regular pay (6% after 5+ yrs)',
     },
     {
       id: 'preset-scholarship',
@@ -471,7 +485,9 @@ export function canadianEarningsPresets(): CanadianPreset[] {
       type: 'earned',
       value: 0,
       active: true,
-      note: 'Flat amount added per paycheque',
+      basedOn: 'base',
+      nonCash: true,
+      note: 'Non-cash benefit, % of Regular pay (excluded from EI)',
     },
   ]
 }

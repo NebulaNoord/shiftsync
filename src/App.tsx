@@ -339,7 +339,7 @@ function App() {
       showToast('Earnings presets already added')
       return
     }
-    updateState({ deductions: [...deductions, ...missing] })
+    updateState({ deductions: [...missing, ...deductions] })
     showToast('Vacation pay + scholarship added')
   }
 
@@ -962,7 +962,7 @@ function SettingsPanel({
                     checked={Boolean(deduction.earnedPercent)}
                     onChange={(event) => onDeduction(deduction.id, { earnedPercent: event.target.checked })}
                   />
-                  % of gross
+                  % of {deduction.basedOn === 'base' ? 'Regular' : 'Gross'}
                 </label>
               )}
               <label className="switch"><input type="checkbox" checked={deduction.active} onChange={(event) => onDeduction(deduction.id, { active: event.target.checked })} /><span /></label>
