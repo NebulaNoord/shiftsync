@@ -718,7 +718,7 @@ function Summary({
           {(() => {
             const applied = summary.rows.filter((row) => !row.nonCash)
             const tracked = summary.rows.filter((row) => row.nonCash)
-            const basePay = summary.gross - summary.positiveAdjustments + summary.totalDeductions
+            const basePay = summary.gross - summary.positiveAdjustments - summary.totalDeductions
             const typeLabel = (row: typeof summary.rows[number]) =>
               row.nonCash ? 'tracked' : row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'
             return (
