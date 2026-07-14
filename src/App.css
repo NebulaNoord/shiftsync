@@ -293,10 +293,6 @@ h2 {
   position: relative;
 }
 
-.day-column:nth-child(3n) { transform: rotate(-1deg); }
-.day-column:nth-child(3n+1) { transform: rotate(0.8deg); }
-.day-column:nth-child(3n+2) { transform: rotate(-0.4deg); }
-
 .day-column.today {
   border-color: var(--red);
   background: #fff;
