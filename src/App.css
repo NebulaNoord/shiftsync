@@ -300,7 +300,7 @@ h2 {
 .day-column.today {
   border-color: var(--red);
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(212, 31, 38, 0.18), var(--shadow-offset-sm);
+  box-shadow: 0 0 0 3px rgba(255, 159, 28, 0.22), var(--shadow-offset-sm);
 }
 
 .day-head {
@@ -596,7 +596,7 @@ h2 {
 .import-panel textarea:focus,
 .settings-layout textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(212, 31, 38, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 159, 28, 0.28);
 }
 
 .field-hint {

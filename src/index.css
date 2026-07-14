@@ -1,18 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  /* Nebula Noord brand system */
-  --ink: #0a0a0a;          /* near-black */
-  --paper: #ffffff;        /* white base */
-  --red: #d41f26;          /* Carmin Red */
-  --red-deep: #ab1720;     /* pressed red */
-  --aqua: #95d9c0;         /* Aqua (supporting) */
-  --aqua-deep: #4f9c83;    /* aqua for text on white */
-  --muted: #6b6b6b;
-  --line: #0a0a0a;
+  /* Ice Water + Tangerine Pop + Tropical Teal */
+  --ink: #111111;          /* near-black */
+  --paper: #eaf7ff;        /* Ice Water base */
+  --red: #ff9f1c;          /* Tangerine Pop */
+  --red-deep: #e0850b;     /* pressed tangerine */
+  --aqua: #2ec4b6;         /* Tropical Teal */
+  --aqua-deep: #13867a;    /* teal for text on light */
+  --muted: #4a4a4a;
+  --line: #111111;
 
-  --shadow-offset: 6px 6px 0 var(--ink);
-  --shadow-offset-sm: 4px 4px 0 var(--ink);
+  /* offset shadows in tangerine for playful energy */
+  --shadow-offset: 6px 6px 0 var(--red);
+  --shadow-offset-sm: 4px 4px 0 var(--red);
   --radius: 14px;
   --radius-sm: 9px;
 
