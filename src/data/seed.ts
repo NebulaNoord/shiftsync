@@ -5,6 +5,11 @@ export const settingsSeed: PayrollSettings = {
   periodType: 'bi-weekly',
   province: '',
   currency: 'CAD',
+  overtimeThresholdDaily: 8,
+  overtimeThresholdWeekly: 40,
+  overtimeMultiplier: 1.5,
+  netGoal: 0,
+  onboarded: false,
 }
 
 export const deductionsSeed: Deduction[] = []

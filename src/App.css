@@ -777,3 +777,115 @@ h2 {
   .calendar-grid { grid-template-columns: 1fr; }
   .stats-row { grid-template-columns: 1fr; }
 }
+
+/* ---------- period stepper / stacked controls ---------- */
+.stack-controls {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+.period-controls {
+  background: var(--aqua);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2.5px solid var(--line);
+}
+.period-controls .glass-icon {
+  background: var(--paper);
+  color: var(--red);
+  width: 28px;
+  height: 28px;
+  box-shadow: none;
+}
+.control-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ---------- goal / overtime / ytd ---------- */
+.goal-block {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  border: 2.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+.goal-block .section-head.compact {
+  margin-bottom: 6px;
+}
+.goal-bar i {
+  background: var(--red);
+}
+.overtime-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 2.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--aqua);
+  font-weight: 800;
+  font-size: 13px;
+}
+.ytd-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 2.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  margin-bottom: 12px;
+}
+.ytd-row strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+/* ---------- recurring generator ---------- */
+.recurring-panel .day-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.day-chip {
+  border: 2.5px solid var(--line);
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 12px;
+  cursor: pointer;
+}
+.day-chip.active {
+  background: var(--red);
+  color: #fff;
+  box-shadow: var(--shadow-offset-sm);
+}
+.recurring-panel .field-hint {
+  margin-bottom: 10px;
+}
+
+/* ---------- onboarding ---------- */
+.onboarding {
+  z-index: 40;
+}
+.onboarding .modal-card {
+  max-width: 440px;
+}
+
+/* ---------- deduction row note ---------- */
+.row-note {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--aqua-deep);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

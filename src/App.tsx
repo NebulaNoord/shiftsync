@@ -9,16 +9,20 @@ import {
   Import,
   LayoutDashboard,
   Plus,
+  Repeat,
   Save,
   Settings,
+  Target,
   Trash2,
   UploadCloud,
   WalletCards,
+  Zap,
 } from 'lucide-react'
 import './App.css'
 import { deductionsSeed, settingsSeed, shiftsSeed } from './data/seed'
 import {
   addDays,
+  canadianTaxPresets,
   formatDateRange,
   getPayPeriodRange,
   getWeekDays,
@@ -29,7 +33,10 @@ import {
   shiftGross,
   shiftHours,
   startOfWeek,
+  stepPayPeriod,
   summarizePay,
+  summarizeYearToDate,
+  toDate,
   type Deduction,
   type DeductionType,
   type PayrollSettings,
@@ -38,6 +45,34 @@ import {
 } from './lib/payroll'
 
 type View = 'dashboard' | 'summary' | 'add' | 'settings'
+
+interface RecurringDraft {
+  days: number[]
+  start: string
+  end: string
+  startTime: string
+  endTime: string
+  location: string
+  notes: string
+  breakMinutes?: number
+  hourlyRateOverride?: number
+  onboardRate: number
+  onboardStart: string
+}
+
+const blankRecurring = (): RecurringDraft => ({
+  days: [1, 2, 3, 4, 5],
+  start: isoDate(new Date()),
+  end: isoDate(addDays(new Date(), 13)),
+  startTime: '09:00',
+  endTime: '17:00',
+  location: '',
+  notes: '',
+  breakMinutes: 0,
+  hourlyRateOverride: undefined,
+  onboardRate: 0,
+  onboardStart: '',
+})
 
 interface AppState {
   shifts: Shift[]
@@ -48,13 +83,6 @@ interface AppState {
 
 const storageKey = 'shiftsync-local-v2'
 
-const canadianPresetDeductions: Deduction[] = [
-  { id: 'preset-federal-tax', name: 'Federal Income Tax', type: 'percentage', value: 12, active: true },
-  { id: 'preset-provincial-tax', name: 'Provincial Tax', type: 'percentage', value: 5, active: true },
-  { id: 'preset-cpp', name: 'CPP', type: 'percentage', value: 5.95, active: true },
-  { id: 'preset-ei', name: 'EI Premium', type: 'percentage', value: 1.66, active: true },
-]
-
 const blankShift = (date = isoDate(new Date())): Shift => ({
   id: '',
   date,
@@ -62,6 +90,7 @@ const blankShift = (date = isoDate(new Date())): Shift => ({
   endTime: '17:00',
   location: '',
   notes: '',
+  breakMinutes: 0,
 })
 
 function loadState(): AppState {
@@ -94,6 +123,10 @@ function App() {
   const [importPreview, setImportPreview] = useState<Shift[]>([])
   const [restoreText, setRestoreText] = useState('')
   const [clearArmed, setClearArmed] = useState(false)
+  /** Anchor date driving the active pay-period view (independent of week nav). */
+  const [periodFocus, setPeriodFocus] = useState<Date>(() => new Date())
+  /** Recurring-shift generator draft. */
+  const [recurring, setRecurring] = useState<RecurringDraft>(() => blankRecurring())
 
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(appState))
@@ -108,12 +141,18 @@ function App() {
   const { shifts, deductions, settings, lifetimeMode } = appState
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart])
   const weekEnd = addDays(weekStart, 6)
-  const period = getPayPeriodRange(weekStart, settings.periodType, settings.payPeriodStart)
+  const period = getPayPeriodRange(periodFocus, settings.periodType, settings.payPeriodStart)
   const periodShifts = shifts.filter((shift) => isWithin(shift.date, period.start, period.end))
   const visibleShifts = lifetimeMode ? shifts : periodShifts
   const weekShifts = shifts.filter((shift) => isWithin(shift.date, weekStart, weekEnd))
-  const periodSummary = summarizePay(visibleShifts, deductions, settings.hourlyRate)
-  const weekSummary = summarizePay(weekShifts, deductions, settings.hourlyRate)
+  const otSettings = {
+    overtimeThresholdDaily: settings.overtimeThresholdDaily,
+    overtimeThresholdWeekly: settings.overtimeThresholdWeekly,
+    overtimeMultiplier: settings.overtimeMultiplier,
+  }
+  const periodSummary = summarizePay(visibleShifts, deductions, settings.hourlyRate, otSettings)
+  const weekSummary = summarizePay(weekShifts, deductions, settings.hourlyRate, otSettings)
+  const ytdSummary = summarizeYearToDate(shifts, deductions, settings.hourlyRate, period.end, otSettings)
   const totalHours = visibleShifts.reduce((total, shift) => total + shiftHours(shift), 0)
   const locations = Array.from(new Set(shifts.map((shift) => shift.location).filter(Boolean)))
 
@@ -182,10 +221,10 @@ function App() {
   }
 
   const exportCsv = () => {
-    const rows = ['date,start_time,end_time,hours,location,gross']
+    const rows = ['date,start_time,end_time,break_min,paid_hours,location,gross']
     shifts.forEach((shift) => {
       rows.push(
-        [shift.date, shift.startTime, shift.endTime, shiftHours(shift), shift.location, shiftGross(shift, settings.hourlyRate)]
+        [shift.date, shift.startTime, shift.endTime, shift.breakMinutes || 0, shiftHours(shift), shift.location, shiftGross(shift, settings.hourlyRate)]
           .map(String)
           .join(','),
       )
@@ -252,9 +291,11 @@ function App() {
     localStorage.removeItem(storageKey)
     setAppState(fresh)
     setWeekStart(startOfWeek(new Date()))
+    setPeriodFocus(new Date())
     setDraftShift(blankShift())
     setImportPreview([])
     setRestoreText('')
+    setRecurring(blankRecurring())
     setClearArmed(false)
     showToast('Local data cleared')
   }
@@ -274,7 +315,9 @@ function App() {
 
   const addCanadianPresets = () => {
     const existingNames = new Set(deductions.map((deduction) => deduction.name.toLowerCase()))
-    const missing = canadianPresetDeductions
+    const annualEstimate = settings.hourlyRate * 2080
+    const presets = canadianTaxPresets(annualEstimate, settings.province)
+    const missing = presets
       .filter((deduction) => !existingNames.has(deduction.name.toLowerCase()))
       .map((deduction) => ({ ...deduction, id: crypto.randomUUID() }))
     if (!missing.length) {
@@ -285,8 +328,61 @@ function App() {
     showToast('Canadian deduction presets added')
   }
 
+  const stepPeriod = (dir: 1 | -1) => {
+    setPeriodFocus((current) => stepPayPeriod(current, settings.periodType, settings.payPeriodStart, dir))
+  }
+
+  const generateRecurring = () => {
+    const pattern = recurring.days.length ? recurring.days : weekDays.map((_, i) => i)
+    const generated: Shift[] = []
+    let cursor = toDate(recurring.start)
+    const end = toDate(recurring.end)
+    while (cursor.getTime() <= end.getTime()) {
+      const dow = cursor.getDay()
+      if (pattern.includes(dow)) {
+        generated.push({
+          id: crypto.randomUUID(),
+          date: isoDate(cursor),
+          startTime: recurring.startTime,
+          endTime: recurring.endTime,
+          location: recurring.location,
+          breakMinutes: recurring.breakMinutes,
+          notes: recurring.notes,
+          hourlyRateOverride: recurring.hourlyRateOverride || undefined,
+        })
+      }
+      cursor = addDays(cursor, 1)
+    }
+    if (!generated.length) {
+      showToast('No dates matched — pick at least one day')
+      return
+    }
+    updateState({ shifts: [...shifts, ...generated] })
+    showToast(`${generated.length} shifts generated`)
+    setRecurring(blankRecurring())
+  }
+
+  const finishOnboarding = () => {
+    updateState({
+      settings: {
+        ...settings,
+        hourlyRate: Number(recurring.onboardRate) || settings.hourlyRate,
+        payPeriodStart: recurring.onboardStart || settings.payPeriodStart,
+        onboarded: true,
+      },
+    })
+    showToast('All set — start adding shifts')
+  }
+
   return (
     <AeroShell>
+      {!settings.onboarded && (
+        <Onboarding
+          draft={recurring}
+          setDraft={setRecurring}
+          onFinish={finishOnboarding}
+        />
+      )}
       <div className="app-shell">
         <aside className="sidebar glass-card">
           <div className="brand-lockup">
@@ -330,6 +426,8 @@ function App() {
               period={period}
               onPrev={() => setWeekStart(addDays(weekStart, -7))}
               onNext={() => setWeekStart(addDays(weekStart, 7))}
+              onPeriodPrev={() => stepPeriod(-1)}
+              onPeriodNext={() => stepPeriod(1)}
               onAdd={(date) => {
                 setDraftShift(blankShift(isoDate(date)))
                 setView('add')
@@ -344,6 +442,7 @@ function App() {
           {view === 'summary' && (
             <Summary
               summary={periodSummary}
+              ytd={ytdSummary}
               settings={settings}
               totalHours={totalHours}
               lifetimeMode={lifetimeMode}
@@ -367,6 +466,9 @@ function App() {
               importPreview={importPreview}
               onParse={parseImport}
               onConfirmImport={confirmImport}
+              recurring={recurring}
+              setRecurring={setRecurring}
+              onGenerateRecurring={generateRecurring}
             />
           )}
 
@@ -451,6 +553,8 @@ function Dashboard(props: {
   period: { start: Date; end: Date }
   onPrev: () => void
   onNext: () => void
+  onPeriodPrev: () => void
+  onPeriodNext: () => void
   onAdd: (date: Date) => void
   onEdit: (shift: Shift) => void
 }) {
@@ -468,9 +572,16 @@ function Dashboard(props: {
             <span className="eyeline">Pay period {formatDateRange(props.period.start, props.period.end)}</span>
             <h2>{formatDateRange(props.weekStart, props.weekEnd)}</h2>
           </div>
-          <div className="week-controls">
-            <button className="glass-icon" type="button" onClick={props.onPrev} aria-label="Previous week"><ChevronLeft /></button>
-            <button className="glass-icon" type="button" onClick={props.onNext} aria-label="Next week"><ChevronRight /></button>
+          <div className="stack-controls">
+            <div className="week-controls">
+              <button className="glass-icon" type="button" onClick={props.onPrev} aria-label="Previous week"><ChevronLeft /></button>
+              <button className="glass-icon" type="button" onClick={props.onNext} aria-label="Next week"><ChevronRight /></button>
+            </div>
+            <div className="week-controls period-controls">
+              <button className="glass-icon" type="button" onClick={props.onPeriodPrev} aria-label="Previous pay period"><ChevronLeft /></button>
+              <span className="control-label">Pay period</span>
+              <button className="glass-icon" type="button" onClick={props.onPeriodNext} aria-label="Next pay period"><ChevronRight /></button>
+            </div>
           </div>
         </div>
         <div className="calendar-grid">
@@ -505,6 +616,7 @@ function Dashboard(props: {
           <span>Total {hours(totalHours)}</span>
           <span>{shiftCount} shifts</span>
           <span>{money(props.summary.gross, props.settings.currency)} gross</span>
+          {props.summary.overtimePay > 0 && <span>OT {money(props.summary.overtimePay, props.settings.currency)}</span>}
         </div>
       </div>
       <StatsRow summary={props.summary} settings={props.settings} hoursValue={totalHours} />
@@ -534,6 +646,7 @@ function StatsRow({ summary, settings, hoursValue }: { summary: ReturnType<typeo
 
 function Summary({
   summary,
+  ytd,
   settings,
   totalHours,
   lifetimeMode,
@@ -543,6 +656,7 @@ function Summary({
   onPdf,
 }: {
   summary: ReturnType<typeof summarizePay>
+  ytd: ReturnType<typeof summarizePay>
   settings: PayrollSettings
   totalHours: number
   lifetimeMode: boolean
@@ -552,6 +666,8 @@ function Summary({
   onPdf: () => void
 }) {
   const netWidth = summary.gross ? Math.max(4, Math.min(100, (summary.net / summary.gross) * 100)) : 0
+  const goal = settings.netGoal || 0
+  const goalPct = goal > 0 ? Math.max(0, Math.min(100, (summary.net / goal) * 100)) : 0
   return (
     <section className="summary-layout">
       <StatsRow summary={summary} settings={settings} hoursValue={totalHours} />
@@ -564,6 +680,24 @@ function Summary({
           <button className="pill-toggle" type="button" onClick={onToggleLifetime}>{lifetimeMode ? 'Lifetime on' : 'Period only'}</button>
         </div>
         <div className="earnings-bar"><i style={{ width: `${netWidth}%` }} /></div>
+        {goal > 0 && (
+          <div className="goal-block">
+            <div className="section-head compact">
+              <span className="eyeline"><Target size={13} /> Net goal</span>
+              <strong>{money(summary.net, settings.currency)} / {money(goal, settings.currency)}</strong>
+            </div>
+            <div className="earnings-bar goal-bar"><i style={{ width: `${goalPct}%` }} /></div>
+          </div>
+        )}
+        {summary.overtimePay > 0 && (
+          <div className="overtime-note">
+            <Zap size={14} /> Includes {money(summary.overtimePay, settings.currency)} overtime ({hours(summary.overtimeHours)})
+          </div>
+        )}
+        <div className="ytd-row">
+          <span className="eyeline">Year to date</span>
+          <strong>{money(ytd.net, settings.currency)} net · {money(ytd.gross, settings.currency)} gross</strong>
+        </div>
         <div className="deduction-list">
           {summary.rows.length ? (
             summary.rows.map((row) => (
@@ -571,6 +705,7 @@ function Summary({
                 <span>{row.name}</span>
                 <em>{row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'}</em>
                 <strong>{row.type === 'earned' ? '+' : '-'}{money(row.amount, settings.currency)}</strong>
+                {row.note && <small className="row-note">{row.note}</small>}
               </div>
             ))
           ) : (
@@ -603,6 +738,9 @@ function AddShift({
   importPreview,
   onParse,
   onConfirmImport,
+  recurring,
+  setRecurring,
+  onGenerateRecurring,
 }: {
   draft: Shift
   setDraft: (shift: Shift) => void
@@ -615,8 +753,18 @@ function AddShift({
   importPreview: Shift[]
   onParse: () => void
   onConfirmImport: () => void
+  recurring: RecurringDraft
+  setRecurring: (value: RecurringDraft) => void
+  onGenerateRecurring: () => void
 }) {
   const preview = summarizePay([{ ...draft, id: draft.id || 'preview' }], deductions, draft.hourlyRateOverride || settings.hourlyRate)
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const toggleDay = (day: number) => {
+    setRecurring({
+      ...recurring,
+      days: recurring.days.includes(day) ? recurring.days.filter((d) => d !== day) : [...recurring.days, day].sort((a, b) => a - b),
+    })
+  }
   return (
     <section className="add-layout">
       <form className="glass-card form-panel" onSubmit={onSubmit}>
@@ -624,6 +772,7 @@ function AddShift({
           <Field label="Date"><input type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} required /></Field>
           <Field label="Start time"><input type="time" value={draft.startTime} onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} required /></Field>
           <Field label="End time"><input type="time" value={draft.endTime} onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} required /></Field>
+          <Field label="Unpaid break (min)"><input type="number" min="0" step="5" value={draft.breakMinutes || ''} placeholder="0" onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) || 0 })} /></Field>
           <Field label="Hourly override"><input type="number" min="0" step="0.01" placeholder={String(settings.hourlyRate)} value={draft.hourlyRateOverride || ''} onChange={(event) => setDraft({ ...draft, hourlyRateOverride: Number(event.target.value) || undefined })} /></Field>
         </div>
         <Field label="Location / Workplace">
@@ -645,6 +794,31 @@ function AddShift({
           <strong>{hours(shiftHours(draft))}</strong>
           <p>{money(preview.gross, settings.currency)} gross</p>
           <p>{money(preview.net, settings.currency)} estimated net</p>
+        </div>
+        <div className="glass-card recurring-panel">
+          <div className="section-head compact">
+            <h2><Repeat size={15} /> Recurring shifts</h2>
+          </div>
+          <p className="field-hint">Fill a pattern of shifts in one go.</p>
+          <div className="day-toggle">
+            {dayLabels.map((label, day) => (
+              <button
+                type="button"
+                key={day}
+                className={`day-chip ${recurring.days.includes(day) ? 'active' : ''}`}
+                onClick={() => toggleDay(day)}
+              >{label}</button>
+            ))}
+          </div>
+          <div className="form-grid">
+            <Field label="From"><input type="date" value={recurring.start} onChange={(event) => setRecurring({ ...recurring, start: event.target.value })} /></Field>
+            <Field label="To"><input type="date" value={recurring.end} onChange={(event) => setRecurring({ ...recurring, end: event.target.value })} /></Field>
+            <Field label="Start"><input type="time" value={recurring.startTime} onChange={(event) => setRecurring({ ...recurring, startTime: event.target.value })} /></Field>
+            <Field label="End"><input type="time" value={recurring.endTime} onChange={(event) => setRecurring({ ...recurring, endTime: event.target.value })} /></Field>
+          </div>
+          <Field label="Unpaid break (min)"><input type="number" min="0" step="5" value={recurring.breakMinutes || ''} placeholder="0" onChange={(event) => setRecurring({ ...recurring, breakMinutes: Number(event.target.value) || 0 })} /></Field>
+          <Field label="Location"><input value={recurring.location} onChange={(event) => setRecurring({ ...recurring, location: event.target.value })} /></Field>
+          <button className="primary-button" type="button" onClick={onGenerateRecurring}><Repeat /> Generate shifts</button>
         </div>
         <div className="glass-card import-panel">
           <div className="section-head compact">
@@ -725,6 +899,10 @@ function SettingsPanel({
             </Field>
             <Field label="Province / territory"><input value={settings.province} onChange={(event) => onSettings({ ...settings, province: event.target.value })} /></Field>
             <Field label="Currency"><input value={settings.currency} onChange={(event) => onSettings({ ...settings, currency: event.target.value.toUpperCase() })} /></Field>
+            <Field label="Overtime after (daily hrs)"><input type="number" min="0" step="0.5" value={settings.overtimeThresholdDaily ?? 8} onChange={(event) => onSettings({ ...settings, overtimeThresholdDaily: Number(event.target.value) || 0 })} /></Field>
+            <Field label="Overtime after (weekly hrs)"><input type="number" min="0" step="0.5" value={settings.overtimeThresholdWeekly ?? 40} onChange={(event) => onSettings({ ...settings, overtimeThresholdWeekly: Number(event.target.value) || 0 })} /></Field>
+            <Field label="Overtime multiplier"><input type="number" min="1" step="0.1" value={settings.overtimeMultiplier ?? 1.5} onChange={(event) => onSettings({ ...settings, overtimeMultiplier: Number(event.target.value) || 1.5 })} /></Field>
+            <Field label="Net pay goal / period"><input type="number" min="0" step="50" value={settings.netGoal || ''} placeholder="0" onChange={(event) => onSettings({ ...settings, netGoal: Number(event.target.value) || 0 })} /></Field>
           </div>
         </div>
         <div className="glass-card local-panel">
@@ -798,6 +976,7 @@ function ShiftModal({
           <Field label="Date"><input type="date" value={shift.date} onChange={(event) => setShift({ ...shift, date: event.target.value })} /></Field>
           <Field label="Start"><input type="time" value={shift.startTime} onChange={(event) => setShift({ ...shift, startTime: event.target.value })} /></Field>
           <Field label="End"><input type="time" value={shift.endTime} onChange={(event) => setShift({ ...shift, endTime: event.target.value })} /></Field>
+          <Field label="Break (min)"><input type="number" min="0" step="5" value={shift.breakMinutes || ''} placeholder="0" onChange={(event) => setShift({ ...shift, breakMinutes: Number(event.target.value) || 0 })} /></Field>
           <Field label="Location"><input value={shift.location} onChange={(event) => setShift({ ...shift, location: event.target.value })} /></Field>
         </div>
         <Field label="Notes"><textarea value={shift.notes || ''} onChange={(event) => setShift({ ...shift, notes: event.target.value })} /></Field>
@@ -856,6 +1035,33 @@ function createSimplePdf(lines: string[]) {
   })
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF`
   return pdf
+}
+
+function Onboarding({ draft, setDraft, onFinish }: { draft: RecurringDraft; setDraft: (value: RecurringDraft) => void; onFinish: () => void }) {
+  return (
+    <div className="modal-backdrop onboarding" role="dialog" aria-modal="true">
+      <form className="modal-card glass-card" onSubmit={(event) => { event.preventDefault(); onFinish() }}>
+        <div className="section-head">
+          <div>
+            <span className="eyeline">Welcome to ShiftSync</span>
+            <h2>Quick setup</h2>
+          </div>
+        </div>
+        <p className="field-hint">Two details and your pay will be accurate from the first shift.</p>
+        <div className="form-grid">
+          <Field label="Hourly rate">
+            <input type="number" step="0.01" min="0" value={draft.onboardRate || ''} placeholder="25.00" onChange={(event) => setDraft({ ...draft, onboardRate: Number(event.target.value) || 0 })} required />
+          </Field>
+          <Field label="Your pay-period start">
+            <input type="date" value={draft.onboardStart} onChange={(event) => setDraft({ ...draft, onboardStart: event.target.value })} required />
+          </Field>
+        </div>
+        <div className="export-row">
+          <button className="primary-button" type="submit"><Save /> Start tracking</button>
+        </div>
+      </form>
+    </div>
+  )
 }
 
 export default App
