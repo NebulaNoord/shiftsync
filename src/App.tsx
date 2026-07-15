@@ -718,7 +718,7 @@ function Summary({
           {(() => {
             const applied = summary.rows.filter((row) => !row.nonCash)
             const tracked = summary.rows.filter((row) => row.nonCash)
-            const basePay = summary.gross - summary.positiveAdjustments - summary.totalDeductions
+            const basePay = summary.gross - summary.positiveAdjustments
             const typeLabel = (row: typeof summary.rows[number]) =>
               row.nonCash ? 'tracked' : row.type === 'percentage' ? `${row.value}%` : row.type === 'flat' ? 'flat' : 'earned'
             return (
@@ -810,6 +810,7 @@ function AddShift({
           <Field label="Start time"><input type="time" value={draft.startTime} onChange={(event) => setDraft({ ...draft, startTime: event.target.value })} required /></Field>
           <Field label="End time"><input type="time" value={draft.endTime} onChange={(event) => setDraft({ ...draft, endTime: event.target.value })} required /></Field>
           <Field label="Unpaid break (min)"><input type="number" min="0" step="5" value={draft.breakMinutes || ''} placeholder="0" onChange={(event) => setDraft({ ...draft, breakMinutes: Number(event.target.value) || 0 })} /></Field>
+          <Field label="Hours override (opt)"><input type="number" min="0" step="0.01" value={draft.hoursOverride ?? ''} placeholder="auto" onChange={(event) => setDraft({ ...draft, hoursOverride: event.target.value === '' ? undefined : Number(event.target.value) })} /></Field>
           <Field label="Hourly override"><input type="number" min="0" step="0.01" placeholder={String(settings.hourlyRate)} value={draft.hourlyRateOverride || ''} onChange={(event) => setDraft({ ...draft, hourlyRateOverride: Number(event.target.value) || undefined })} /></Field>
         </div>
         <Field label="Location / Workplace">
@@ -1027,6 +1028,7 @@ function ShiftModal({
           <Field label="Start"><input type="time" value={shift.startTime} onChange={(event) => setShift({ ...shift, startTime: event.target.value })} /></Field>
           <Field label="End"><input type="time" value={shift.endTime} onChange={(event) => setShift({ ...shift, endTime: event.target.value })} /></Field>
           <Field label="Break (min)"><input type="number" min="0" step="5" value={shift.breakMinutes || ''} placeholder="0" onChange={(event) => setShift({ ...shift, breakMinutes: Number(event.target.value) || 0 })} /></Field>
+          <Field label="Hours override (opt)"><input type="number" min="0" step="0.01" value={shift.hoursOverride ?? ''} placeholder="auto" onChange={(event) => setShift({ ...shift, hoursOverride: event.target.value === '' ? undefined : Number(event.target.value) })} /></Field>
           <Field label="Location"><input value={shift.location} onChange={(event) => setShift({ ...shift, location: event.target.value })} /></Field>
         </div>
         <Field label="Notes"><textarea value={shift.notes || ''} onChange={(event) => setShift({ ...shift, notes: event.target.value })} /></Field>

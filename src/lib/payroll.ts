@@ -12,6 +12,9 @@ export interface Shift {
   hourlyRateOverride?: number
   /** Unpaid break minutes deducted from paid hours. */
   breakMinutes?: number
+  /** Manually set paid hours, overriding clock-time calculation (use when your
+   * stub rounds hours differently than the start/end times imply). */
+  hoursOverride?: number
 }
 
 export interface Deduction {
@@ -127,17 +130,25 @@ export function getWeekDays(weekStart: Date) {
   return Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
 }
 
-/** Raw clock length of a shift in hours (before break deduction). */
+/** Raw clock length of a shift in hours (before break deduction).
+ * Keeps full float precision — rounding happens only at display time
+ * (hours()) so payroll math matches employers that don't truncate partial minutes. */
 export function shiftClockHours(shift: Pick<Shift, 'startTime' | 'endTime'>) {
   const [startHour, startMinute] = shift.startTime.split(':').map(Number)
   const [endHour, endMinute] = shift.endTime.split(':').map(Number)
   let minutes = endHour * 60 + endMinute - (startHour * 60 + startMinute)
   if (minutes < 0) minutes += 24 * 60
-  return Math.round((minutes / 60) * 100) / 100
+  return minutes / 60
 }
 
-/** Paid hours = clock hours minus unpaid break. */
-export function shiftHours(shift: Pick<Shift, 'startTime' | 'endTime' | 'breakMinutes'>) {
+/** Paid hours = clock hours minus unpaid break.
+ * Rounded half-up to 2 decimals so payroll matches employer stubs that
+ * bill on the hundredth of an hour. A manal hoursOverride (if set)
+ * takes precedence — use it when your stub's hours differ from the clock math. */
+export function shiftHours(shift: Pick<Shift, 'startTime' | 'endTime' | 'breakMinutes' | 'hoursOverride'>) {
+  if (shift.hoursOverride != null && !Number.isNaN(shift.hoursOverride)) {
+    return Math.round(shift.hoursOverride * 100) / 100
+  }
   const paid = shiftClockHours(shift) - (shift.breakMinutes || 0) / 60
   return Math.round(paid * 100) / 100
 }
