@@ -424,7 +424,7 @@ export const CPP2_MAX_PENSIONABLE = 73200
 export const CPP2_MAX = round2((CPP2_MAX_PENSIONABLE - CPP_MAX_PENSIONABLE) * CPP2_RATE) // 188.00
 
 // EI
-export const EI_RATE = 0.0166
+export const EI_RATE = 0.0163
 export const EI_MAX_INSURABLE = 63200
 export const EI_MAX = round2(EI_MAX_INSURABLE * EI_RATE) // 1049.12
 
@@ -500,8 +500,9 @@ export function canadianEarningsPresets(): CanadianPreset[] {
       id: 'preset-scholarship',
       name: 'Accrued (non-cash)',
       type: 'earned',
-      value: 0,
+      value: 1.667,
       active: true,
+      earnedPercent: true,
       basedOn: 'base',
       nonCash: true,
       note: 'Tracked benefit, % of Regular pay (not added to gross/net)',

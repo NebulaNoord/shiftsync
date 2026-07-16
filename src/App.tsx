@@ -33,6 +33,7 @@ import {
   money,
   shiftGross,
   shiftHours,
+  shiftClockHours,
   startOfWeek,
   stepPayPeriod,
   summarizePay,
@@ -829,7 +830,10 @@ function AddShift({
       <aside className="side-stack">
         <div className="glass-card live-preview">
           <span className="eyeline">Live preview</span>
-          <strong>{hours(shiftHours(draft))}</strong>
+          <strong>{hours(shiftHours(draft))}h</strong>
+          {draft.hoursOverride != null && !Number.isNaN(draft.hoursOverride) && (
+            <p className="hours-flag">Override: {draft.hoursOverride}h (clock math {hours(shiftClockHours(draft))}h)</p>
+          )}
           <p>{money(preview.gross, settings.currency)} gross</p>
           <p>{money(preview.net, settings.currency)} estimated net</p>
         </div>
